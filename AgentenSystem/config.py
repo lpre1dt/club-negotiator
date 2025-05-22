@@ -1,19 +1,70 @@
 # =================================================================
-# FOOTBALL NEGOTIATION SYSTEM - ZENTRALE KONFIGURATION
+# FOOTBALL NEGOTIATION SYSTEM - ZENTRALE KONFIGURATION (NEU)
+# ECHTE CLUB-VERHANDLUNGEN MIT REALISTISCHEN SQUADS
 # =================================================================
 
 # =================================================================
 # SYSTEM EINSTELLUNGEN
 # =================================================================
 SYSTEM_CONFIG = {
-    # Anzahl Spieler die geladen werden sollen
-    "MAX_PLAYERS": 30,
     # CSV-Datei Pfad
     "CSV_FILE_PATH": "player_stats.csv",
-    # Erstelle automatisch Beispieldaten wenn CSV nicht existiert
-    "AUTO_CREATE_SAMPLE_DATA": True,
     # Encoding für CSV-Dateien
     "CSV_ENCODING": "utf-8",
+    # Erstelle automatisch Beispieldaten wenn CSV nicht existiert
+    "AUTO_CREATE_SAMPLE_DATA": True,
+}
+
+# =================================================================
+# CLUB-AUSWAHL KONFIGURATION (NEU!)
+# =================================================================
+CLUB_CONFIG = {
+    # Welche zwei Clubs sollen verhandeln?
+    # Diese Namen müssen EXAKT in der CSV-Spalte "club" vorkommen
+    "BUYER_CLUB_NAME": "FC Porto",
+    "SELLER_CLUB_NAME": "Bayern Munich",
+    
+    # Was passiert wenn ein Club zu wenige Spieler hat?
+    "MIN_PLAYERS_REQUIRED": 11,  # Mindestens 11 Spieler pro Club (Startelf)
+    
+    # Strategie für unterschiedliche Squad-Größen:
+    # - "pad_smaller": Kleineren Squad mit Dummy-Spielern auffüllen
+    # - "truncate_larger": Größeren Squad auf kleinere Größe kürzen  
+    # - "use_minimum": Nur die ersten N Spieler beider Clubs verwenden
+    # - "allow_unequal": Verhandlung mit unterschiedlichen Squad-Größen
+    "SQUAD_SIZE_STRATEGY": "use_minimum",
+    
+    # Falls pad_smaller: Wie sollen Dummy-Spieler heißen?
+    "DUMMY_PLAYER_NAME": "Reserve Player",
+    
+    # Maximum Anzahl Spieler pro Club (verhindert zu große Squads)
+    "MAX_PLAYERS_PER_CLUB": 30,
+    
+    # Fallback falls ein Club nicht gefunden wird
+    "FALLBACK_TO_SAMPLE_DATA": True,
+}
+
+# =================================================================
+# ANZEIGE-KONFIGURATION FÜR CLUBS
+# =================================================================
+DISPLAY_CONFIG = {
+    # Zeige detaillierte Club-Informationen
+    "SHOW_CLUB_DETAILS": True,
+    
+    # Zeige die geheimen Zielfunktionen der Clubs
+    "SHOW_CLUB_OBJECTIVES": True,
+    
+    # Zeige Squad-Zusammensetzung vor Verhandlung
+    "SHOW_INITIAL_SQUADS": True,
+    
+    # Anzahl Beispiel-Spieler pro Club anzeigen
+    "NUM_EXAMPLE_PLAYERS_PER_CLUB": 5,
+    
+    # Zeige Statistiken über Spielerverteilung
+    "SHOW_PLAYER_STATISTICS": True,
+    
+    # Zeige Warnung bei Squad-Größen-Problemen
+    "WARN_SQUAD_SIZE_ISSUES": True,
 }
 
 # =================================================================
@@ -54,10 +105,14 @@ SA_CONFIG = {
 
 # =================================================================
 # KÄUFER-VEREIN KONFIGURATION (FC OFFENSIVE UNITED)
+# Jetzt konfigurierbar für jeden Club aus der CSV!
 # =================================================================
 BUYER_CONFIG = {
-    "CLUB_NAME": "FC Offensive United",
+    # Name wird automatisch aus CLUB_CONFIG übernommen, kann aber überschrieben werden
+    "CLUB_NAME": None,  # Falls None, wird CLUB_CONFIG["BUYER_CLUB_NAME"] verwendet
+    
     # Attribut-Gewichtungen (normalisiert auf 0-1)
+    # Käufer bevorzugt offensive und technische Spieler
     "ATTRIBUTE_WEIGHTS": {
         "ball_control": 2.5,  # Sehr wichtig für Technik
         "dribbling": 2.3,  # Sehr wichtig für Technik
@@ -84,50 +139,29 @@ BUYER_CONFIG = {
         "finishing": 2.9,  # Extrem wichtig für Tore
         "long_shots": 2.1,  # Wichtig
     },
-    # Positions-Gewichtungen (Index = Position, Wert = Gewichtung)
+    # Positions-Gewichtungen (Index = Position im Squad, Wert = Gewichtung)
+    # Frühe Positionen = Stammspieler (wichtiger)
+    # Späte Positionen = Bank/Reserve (weniger wichtig)
     "POSITION_WEIGHTS": [
-        # Defensive Positionen (0-9) - niedrigere Gewichtung
-        0.8,
-        0.8,
-        0.9,
-        0.9,
-        1.0,
-        1.1,
-        1.1,
-        1.2,
-        1.2,
-        1.3,
-        # Mittelfeld (10-19) - mittlere Gewichtung
-        1.4,
-        1.4,
-        1.5,
-        1.5,
-        1.6,
-        1.7,
-        1.7,
-        1.8,
-        1.8,
-        1.9,
-        # Angriff (20-29) - hohe Gewichtung
-        2.0,
-        2.1,
-        2.2,
-        2.3,
-        2.4,
-        2.5,
-        2.6,
-        2.7,
-        2.8,
-        2.9,
+        # Frühe Positionen (0-9) - mittlere Gewichtung
+        1.8, 1.8, 1.7, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1,
+        # Mittlere Positionen (10-19) - niedrige Gewichtung
+        1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1,
+        # Späte Positionen (20-29) - sehr niedrige Gewichtung
+        0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05,
     ],
 }
 
 # =================================================================
 # VERKÄUFER-VEREIN KONFIGURATION (DEFENSIVE FC)
+# Jetzt konfigurierbar für jeden Club aus der CSV!
 # =================================================================
 SELLER_CONFIG = {
-    "CLUB_NAME": "Defensive FC",
+    # Name wird automatisch aus CLUB_CONFIG übernommen, kann aber überschrieben werden
+    "CLUB_NAME": None,  # Falls None, wird CLUB_CONFIG["SELLER_CLUB_NAME"] verwendet
+    
     # Attribut-Gewichtungen (fokussiert auf Defensive)
+    # Verkäufer bevorzugt defensive und vielseitige Spieler
     "ATTRIBUTE_WEIGHTS": {
         "ball_control": 1.9,  # Wichtig
         "dribbling": 1.5,  # Etwas wichtig
@@ -154,41 +188,15 @@ SELLER_CONFIG = {
         "finishing": 1.1,  # Weniger wichtig
         "long_shots": 1.3,  # Etwas wichtig
     },
-    # Positions-Gewichtungen (hohe Gewichtung für Defense)
+    # Positions-Gewichtungen (hohe Gewichtung für frühe Positionen)
+    # Verkäufer will seine besten Spieler in frühen Positionen
     "POSITION_WEIGHTS": [
-        # Defensive Positionen (0-9) - hohe Gewichtung
-        2.9,
-        2.8,
-        2.7,
-        2.6,
-        2.5,
-        2.4,
-        2.3,
-        2.2,
-        2.1,
-        2.0,
-        # Mittelfeld (10-19) - mittlere Gewichtung
-        1.9,
-        1.8,
-        1.7,
-        1.6,
-        1.5,
-        1.4,
-        1.3,
-        1.2,
-        1.1,
-        1.0,
-        # Angriff (20-29) - niedrige Gewichtung
-        0.9,
-        0.9,
-        0.8,
-        0.8,
-        0.8,
-        0.7,
-        0.7,
-        0.6,
-        0.6,
-        0.5,
+        # Frühe Positionen (0-9) - hohe Gewichtung
+        2.9, 2.8, 2.7, 2.6, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0,
+        # Mittlere Positionen (10-19) - mittlere Gewichtung
+        1.9, 1.8, 1.7, 1.6, 1.5, 1.4, 1.3, 1.2, 1.1, 1.0,
+        # Späte Positionen (20-29) - niedrige Gewichtung
+        0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05,
     ],
 }
 
@@ -294,3 +302,36 @@ DEBUG_CONFIG = {
     # Pfad für Debug-Logs
     "DEBUG_LOG_PATH": "debug.log",
 }
+
+# =================================================================
+# CLUB-SPEZIFISCHE VALIDIERUNG
+# =================================================================
+def validate_club_config():
+    """
+    Validiert die Club-Konfiguration und gibt Warnungen aus
+    """
+    warnings = []
+    
+    # Prüfe ob Club-Namen gesetzt sind
+    if not CLUB_CONFIG["BUYER_CLUB_NAME"]:
+        warnings.append("⚠️ BUYER_CLUB_NAME ist nicht gesetzt!")
+    
+    if not CLUB_CONFIG["SELLER_CLUB_NAME"]:
+        warnings.append("⚠️ SELLER_CLUB_NAME ist nicht gesetzt!")
+    
+    # Prüfe Squad-Size-Strategie
+    valid_strategies = ["pad_smaller", "truncate_larger", "use_minimum", "allow_unequal"]
+    if CLUB_CONFIG["SQUAD_SIZE_STRATEGY"] not in valid_strategies:
+        warnings.append(f"⚠️ Ungültige SQUAD_SIZE_STRATEGY: {CLUB_CONFIG['SQUAD_SIZE_STRATEGY']}")
+        warnings.append(f"   Gültige Optionen: {valid_strategies}")
+    
+    # Gib Warnungen aus
+    if warnings and DEBUG_CONFIG.get("VALIDATE_CONFIG", True):
+        print("\n" + "="*50)
+        print("KONFIGURATIONS-WARNUNGEN:")
+        print("="*50)
+        for warning in warnings:
+            print(warning)
+        print("="*50 + "\n")
+    
+    return len(warnings) == 0

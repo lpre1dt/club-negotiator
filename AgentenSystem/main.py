@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
 """
-FUSSBALL-VERHANDLUNGSSYSTEM MIT ERWEITERTEN STATISTIKEN
-Zentral konfigurierbar über config.py
+CLUB-BASIERTES FUßBALL-VERHANDLUNGSSYSTEM
+==========================================
+
+Dieses System simuliert realistische Verhandlungen zwischen zwei echten 
+Fußball-Clubs über ihre Squad-Aufstellungen.
+
+Wichtige Features:
+- Echte Clubs aus CSV-Daten
+- Unterschiedliche Squad-Größen
+- Transparente Club-Zielfunktionen  
+- Intelligent behandelte Größenunterschiede
+- Vollständig konfigurierbar
+
+Konfiguration erfolgt vollständig über config.py
 """
 
 # Import der zentralen Konfiguration
@@ -9,483 +21,420 @@ from config import *
 
 from BuyerClubAgent import BuyerClubAgent
 from SellerClubAgent import SellerClubAgent
-from FootballMediator import FootballMediator
-from PlayerDataLoader import PlayerDataLoader
+from PlayerDataLoader import ClubBasedPlayerDataLoader
+from FootballMediator import ClubBasedFootballMediator
 import time
 import statistics
 
 
-class NegotiationAnalyzer:
-    """Analysiert und protokolliert Verhandlungsstatistiken"""
-
-    def __init__(self):
-        self.history = []
-        self.utility_history_buyer = []
-        self.utility_history_seller = []
-        self.temperature_history_buyer = []
-        self.temperature_history_seller = []
-        self.acceptance_rates_over_time = []
-
-    def record_swap(
-        self,
-        round_num,
-        squad,
-        buyer_utility,
-        seller_utility,
-        buyer_temp,
-        seller_temp,
-        accepted_count,
-        total_proposals,
-    ):
-        """Protokolliert einen Swap"""
-        self.history.append(
-            {
-                "round": round_num,
-                "squad": squad.copy(),
-                "buyer_utility": buyer_utility,
-                "seller_utility": seller_utility,
-                "buyer_temp": buyer_temp,
-                "seller_temp": seller_temp,
-                "acceptance_rate": accepted_count / max(total_proposals, 1),
-            }
-        )
-
-        self.utility_history_buyer.append(buyer_utility)
-        self.utility_history_seller.append(seller_utility)
-        self.temperature_history_buyer.append(buyer_temp)
-        self.temperature_history_seller.append(seller_temp)
-        self.acceptance_rates_over_time.append(accepted_count / max(total_proposals, 1))
-
-    def get_utility_statistics(self, utilities):
-        """Berechnet Statistiken für Utility-Verlauf"""
-        if not utilities:
-            return {}
-
-        return {
-            "min": min(utilities),
-            "max": max(utilities),
-            "mean": statistics.mean(utilities),
-            "median": statistics.median(utilities),
-            "std_dev": statistics.stdev(utilities) if len(utilities) > 1 else 0,
-            "range": max(utilities) - min(utilities),
-        }
-
-
-def print_config_summary():
-    """Zeigt Konfigurations-Übersicht"""
-    if not DEBUG_CONFIG.get("SHOW_CONFIG_SUMMARY", False):
+def print_club_objectives_transparent():
+    """
+    Zeigt die normalerweise geheimen Zielfunktionen beider Clubs
+    
+    Dies macht die Verhandlung transparent und hilft beim Verständnis
+    warum bestimmte Entscheidungen getroffen werden.
+    """
+    if not DISPLAY_CONFIG.get("SHOW_CLUB_OBJECTIVES", True):
         return
-
-    print("=" * 70)
-    print("KONFIGURATIONS-ÜBERSICHT")
-    print("=" * 70)
-    print(f"Spieler: {SYSTEM_CONFIG['MAX_PLAYERS']}")
-    print(f"Max Runden: {NEGOTIATION_CONFIG['MAX_ROUNDS']}")
-    print(f"Start-Temperatur: {SA_CONFIG['INITIAL_TEMPERATURE']}")
-    print(f"Min. Akzeptanzrate: {SA_CONFIG['MIN_ACCEPTANCE_RATE']}")
-    print(f"Käufer: {BUYER_CONFIG['CLUB_NAME']}")
-    print(f"Verkäufer: {SELLER_CONFIG['CLUB_NAME']}")
-    print("=" * 70)
-
-
-def analyze_team_composition(buyer_club, seller_club, squad):
-    """Analysiert Team-Zusammensetzung"""
-    if not ANALYSIS_CONFIG.get("ANALYZE_ATTRIBUTE_DISTRIBUTION", False):
-        return
-
-    print(f"\n{'-'*50}")
-    print("TEAM-KOMPOSITION ANALYSE")
-    print(f"{'-'*50}")
-
-    # Analysiere Attribute
-    key_attrs = ANALYSIS_CONFIG.get("KEY_ATTRIBUTES", [])
-
-    for attr in key_attrs:
-        values = []
-        for idx in squad[:10]:  # Erste 10 Positionen
-            player = buyer_club.players[idx]
-            if hasattr(player, attr):
-                values.append(getattr(player, attr))
-
-        if values:
-            avg_val = sum(values) / len(values)
-            print(
-                f"{attr.capitalize():>15}: Ø {avg_val:5.1f} (Range: {min(values)}-{max(values)})"
-            )
-
-    # Altersverteilung
-    if ANALYSIS_CONFIG.get("ANALYZE_AGE_DISTRIBUTION", False):
-        ages = [buyer_club.players[idx].age for idx in squad]
-        age_groups = ANALYSIS_CONFIG.get("AGE_GROUPS", {})
-
-        print(f"\nALTERSVERTEILUNG:")
-        print(f"Durchschnitt: {sum(ages)/len(ages):.1f} Jahre")
-
-        for group_name, (min_age, max_age) in age_groups.items():
-            count = sum(1 for age in ages if min_age <= age <= max_age)
-            percentage = count / len(ages) * 100
-            print(
-                f"{group_name:>10} ({min_age}-{max_age}): {count:2d} Spieler ({percentage:4.1f}%)"
-            )
+    
+    print("\n" + "="*70)
+    print("🎯 CLUB-ZIELFUNKTIONEN (NORMALERWEISE GEHEIM!)")
+    print("="*70)
+    
+    # Käufer-Club Ziele
+    buyer_name = CLUB_CONFIG["BUYER_CLUB_NAME"]
+    print(f"\n{buyer_name} - KÄUFER-STRATEGIE:")
+    print("-" * 50)
+    print("🎯 Hauptziel: Offensive Power maximieren")
+    print("📊 Bevorzugte Attribute:")
+    
+    # Top 5 Attribute für Käufer
+    buyer_attrs = BUYER_CONFIG["ATTRIBUTE_WEIGHTS"]
+    top_buyer_attrs = sorted(buyer_attrs.items(), key=lambda x: x[1], reverse=True)[:5]
+    
+    for attr, weight in top_buyer_attrs:
+        print(f"   • {attr.replace('_', ' ').title()}: {weight:.1f}")
+    
+    print("🏃 Positions-Präferenz: Hohe Gewichtung für frühe Positionen")
+    print("💭 Geheime Tactic: Will technische und offensive Spieler vorne")
+    
+    # Verkäufer-Club Ziele  
+    seller_name = CLUB_CONFIG["SELLER_CLUB_NAME"]
+    print(f"\n{seller_name} - VERKÄUFER-STRATEGIE:")
+    print("-" * 50)
+    print("🎯 Hauptziel: Defensive Stabilität maximieren")
+    print("📊 Bevorzugte Attribute:")
+    
+    # Top 5 Attribute für Verkäufer
+    seller_attrs = SELLER_CONFIG["ATTRIBUTE_WEIGHTS"] 
+    top_seller_attrs = sorted(seller_attrs.items(), key=lambda x: x[1], reverse=True)[:5]
+    
+    for attr, weight in top_seller_attrs:
+        print(f"   • {attr.replace('_', ' ').title()}: {weight:.1f}")
+    
+    print("🛡️ Positions-Präferenz: Hohe Gewichtung für frühe Positionen")
+    print("💭 Geheime Tactic: Will defensive und vielseitige Spieler vorne")
+    
+    # Konflikt-Analyse
+    print(f"\n⚔️ KONFLIKT-ANALYSE:")
+    print("-" * 50)
+    print("Beide Clubs wollen ihre besten Spieler in frühen Positionen!")
+    print("Käufer bevorzugt: Angriff & Technik")
+    print("Verkäufer bevorzugt: Defense & Vielseitigkeit")
+    print("➡️ Dies führt zu spannenden Verhandlungen!")
+    
+    print("="*70)
 
 
-def analyze_position_preferences(buyer_club, seller_club, initial_squad, final_squad):
-    """Analysiert Positions-Präferenzen"""
-    if not ANALYSIS_CONFIG.get("ANALYZE_POSITION_PREFERENCES", False):
-        return
-
-    print(f"\n{'-'*50}")
-    print("POSITIONS-PRÄFERENZ ANALYSE")
-    print(f"{'-'*50}")
-
-    num_pos = ANALYSIS_CONFIG.get("NUM_POSITIONS_TO_ANALYZE", 10)
-
-    # Analysiere Veränderungen in ersten X Positionen
-    print(f"Änderungen in ersten {num_pos} Positionen:")
-    changes = 0
-    for i in range(min(num_pos, len(final_squad))):
-        if initial_squad[i] != final_squad[i]:
-            changes += 1
-            old_player = buyer_club.players[initial_squad[i]]
-            new_player = buyer_club.players[final_squad[i]]
-            print(f"  Pos {i:2d}: {old_player.name} → {new_player.name}")
-
-    print(
-        f"Gesamt: {changes}/{num_pos} Positionen geändert ({changes/num_pos*100:.1f}%)"
-    )
-
-    # Analysiere Präferenz für hohe vs niedrige Indizes
-    high_indices = sum(1 for idx in final_squad[:num_pos] if idx >= 20)
-    low_indices = sum(1 for idx in final_squad[:num_pos] if idx < 10)
-    mid_indices = num_pos - high_indices - low_indices
-
-    print(f"\nVerteilung in ersten {num_pos} Positionen:")
-    print(f"Defensive (0-9):   {low_indices:2d} ({low_indices/num_pos*100:4.1f}%)")
-    print(f"Mittelfeld (10-19): {mid_indices:2d} ({mid_indices/num_pos*100:4.1f}%)")
-    print(f"Angriff (20-29):   {high_indices:2d} ({high_indices/num_pos*100:4.1f}%)")
-
-
-def print_synergy_analysis(buyer_club, seller_club, squad):
-    """Zeigt Synergieeffekt-Analyse"""
-    if not ANALYSIS_CONFIG.get("CALCULATE_SYNERGY_STATS", False):
-        return
-
-    print(f"\n{'-'*50}")
-    print("SYNERGIE-EFFEKTE ANALYSE")
-    print(f"{'-'*50}")
-
-    # Berechne Synergien separat
-    total_synergy_buyer = buyer_club._calculate_synergy_bonus(squad)
-    total_synergy_seller = seller_club._calculate_synergy_bonus(squad)
-
-    print(f"Käufer Synergien:   {total_synergy_buyer:7.2f}")
-    print(f"Verkäufer Synergien: {total_synergy_seller:7.2f}")
-
-    # Analysiere Altersverteilung
-    ages = [buyer_club.players[idx].age for idx in squad]
-    age_bonus_buyer = buyer_club._calculate_age_bonus(squad)
-    age_bonus_seller = seller_club._calculate_age_bonus(squad)
-
-    print(f"\nAlters-Boni:")
-    print(f"Käufer:   {age_bonus_buyer:7.2f}")
-    print(f"Verkäufer: {age_bonus_seller:7.2f}")
-    print(f"Ø Alter:  {sum(ages)/len(ages):7.1f} Jahre")
+def load_club_data_with_validation():
+    """
+    Lädt Club-Daten aus der CSV mit vollständiger Validierung
+    
+    Returns:
+        Tuple[Tuple[List[Player], List[Player]], Tuple[str, str]]: 
+        ((Käufer-Spieler, Verkäufer-Spieler), (Käufer-Name, Verkäufer-Name))
+    """
+    print("🔄 LADE CLUB-DATEN...")
+    
+    # Validiere Club-Konfiguration
+    config_valid = validate_club_config()
+    if not config_valid and DEBUG_CONFIG.get("DEBUG_MODE", False):
+        print("⚠️ Konfiguration hat Probleme, fahre trotzdem fort...")
+    
+    # Lade Spieler für beide Clubs
+    try:
+        buyer_players, seller_players = ClubBasedPlayerDataLoader.load_clubs_from_csv()
+        
+        # Bestimme finale Club-Namen
+        buyer_club_name = BUYER_CONFIG.get("CLUB_NAME") or CLUB_CONFIG["BUYER_CLUB_NAME"]
+        seller_club_name = SELLER_CONFIG.get("CLUB_NAME") or CLUB_CONFIG["SELLER_CLUB_NAME"]
+        
+        return (buyer_players, seller_players), (buyer_club_name, seller_club_name)
+        
+    except Exception as e:
+        print(f"❌ Fehler beim Laden der Club-Daten: {e}")
+        
+        if DEBUG_CONFIG.get("DEBUG_MODE", False):
+            import traceback
+            traceback.print_exc()
+        
+        raise
 
 
-def print_extended_statistics(
-    analyzer,
-    buyer_club,
-    seller_club,
-    initial_squad,
-    final_squad,
-    start_time,
-    accepted_swaps,
-    max_rounds,
-):
-    """Zeigt erweiterte Statistiken am Ende"""
-    if not LOGGING_CONFIG.get("SHOW_EXTENDED_STATS", False):
-        return
-
-    end_time = time.time()
-    duration = end_time - start_time
-
-    print("\n" + "=" * 70)
-    print("ERWEITERTE VERHANDLUNGS-STATISTIKEN")
-    print("=" * 70)
-
-    # Zeit-Statistiken
-    print(f"ZEIT-STATISTIKEN:")
-    print(f"Gesamtdauer:        {duration:8.2f} Sekunden")
-    print(f"Runden/Sekunde:     {max_rounds/duration:8.2f}")
-    print(f"Swaps/Sekunde:      {accepted_swaps/duration:8.2f}")
-    print(f"Ø Zeit/Runde:       {duration/max_rounds*1000:8.2f} ms")
-
-    # Utility-Entwicklung
-    if analyzer.utility_history_buyer and LOGGING_CONFIG.get(
-        "SHOW_UTILITY_DEVELOPMENT", False
-    ):
-        print(f"\nUTILITY-ENTWICKLUNG:")
-
-        buyer_stats = analyzer.get_utility_statistics(analyzer.utility_history_buyer)
-        seller_stats = analyzer.get_utility_statistics(analyzer.utility_history_seller)
-
-        print(f"KÄUFER ({buyer_club.club_name}):")
-        print(f"  Start:           {analyzer.utility_history_buyer[0]:10.2f}")
-        print(f"  Ende:            {analyzer.utility_history_buyer[-1]:10.2f}")
-        print(
-            f"  Verbesserung:    {analyzer.utility_history_buyer[-1] - analyzer.utility_history_buyer[0]:10.2f}"
-        )
-        print(f"  Maximum:         {buyer_stats['max']:10.2f}")
-        print(f"  Minimum:         {buyer_stats['min']:10.2f}")
-        print(f"  Standardabw.:    {buyer_stats['std_dev']:10.2f}")
-
-        print(f"\nVERKÄUFER ({seller_club.club_name}):")
-        print(f"  Start:           {analyzer.utility_history_seller[0]:10.2f}")
-        print(f"  Ende:            {analyzer.utility_history_seller[-1]:10.2f}")
-        print(
-            f"  Verbesserung:    {analyzer.utility_history_seller[-1] - analyzer.utility_history_seller[0]:10.2f}"
-        )
-        print(f"  Maximum:         {seller_stats['max']:10.2f}")
-        print(f"  Minimum:         {seller_stats['min']:10.2f}")
-        print(f"  Standardabw.:    {seller_stats['std_dev']:10.2f}")
-
-    # Temperatur-Entwicklung
-    if analyzer.temperature_history_buyer:
-        print(f"\nTEMPERATUR-ENTWICKLUNG:")
-        print(f"Käufer Start:       {analyzer.temperature_history_buyer[0]:8.2f}")
-        print(f"Käufer Ende:        {analyzer.temperature_history_buyer[-1]:8.2f}")
-        print(f"Verkäufer Start:    {analyzer.temperature_history_seller[0]:8.2f}")
-        print(f"Verkäufer Ende:     {analyzer.temperature_history_seller[-1]:8.2f}")
-
-    # Akzeptanzraten über Zeit
-    if analyzer.acceptance_rates_over_time:
-        print(f"\nAKZEPTANZRATEN:")
-        rates = analyzer.acceptance_rates_over_time
-        print(f"Start (erste 100):  {sum(rates[:100])/len(rates[:100])*100:6.2f}%")
-        print(
-            f"Mitte:             {sum(rates[len(rates)//3:2*len(rates)//3])/len(rates[len(rates)//3:2*len(rates)//3])*100:6.2f}%"
-        )
-        print(f"Ende (letzte 100):  {sum(rates[-100:])/len(rates[-100:])*100:6.2f}%")
-        print(f"Gesamt:            {sum(rates)/len(rates)*100:6.2f}%")
-
-    # Team-Komposition
-    analyze_team_composition(buyer_club, seller_club, final_squad)
-
-    # Positions-Präferenzen
-    analyze_position_preferences(buyer_club, seller_club, initial_squad, final_squad)
-
-    # Synergieeffekte
-    print_synergy_analysis(buyer_club, seller_club, final_squad)
+def create_club_agents_with_data(buyer_players, seller_players, buyer_name, seller_name):
+    """
+    Erstellt die Club-Agenten und setzt ihre Spieler-Daten
+    
+    Args:
+        buyer_players: Liste der Käufer-Spieler
+        seller_players: Liste der Verkäufer-Spieler
+        buyer_name: Name des Käufer-Clubs
+        seller_name: Name des Verkäufer-Clubs
+        
+    Returns:
+        Tuple[BuyerClubAgent, SellerClubAgent]: Die konfigurierten Club-Agenten
+    """
+    print("\n🏗️ ERSTELLE CLUB-AGENTEN...")
+    
+    # Erstelle Käufer-Club mit übergebenem Namen
+    buyer_club = BuyerClubAgent(buyer_name)
+    buyer_club.set_players(buyer_players)
+    
+    # Erstelle Verkäufer-Club mit übergebenem Namen  
+    seller_club = SellerClubAgent(seller_name)
+    seller_club.set_players(seller_players)
+    
+    # Zeige Club-Informationen
+    print(f"✅ {buyer_club.club_name}: {len(buyer_players)} Spieler")
+    print(f"✅ {seller_club.club_name}: {len(seller_players)} Spieler")
+    
+    # Kurze Spieler-Bewertungs-Demonstration
+    if DISPLAY_CONFIG.get("SHOW_DETAILED_START_INFO", True):
+        print(f"\n📊 SPIELER-BEWERTUNGS-PREVIEW:")
+        num_examples = min(3, len(buyer_players), len(seller_players))
+        
+        print("Beispiel - Wie die Clubs ihre eigenen Spieler bewerten:")
+        print("-" * 60)
+        
+        for i in range(num_examples):
+            buyer_player = buyer_players[i]
+            buyer_rating = buyer_club.evaluate_player(buyer_player)
+            print(f"{buyer_name}: {buyer_player.name:<25} = {buyer_rating:6.1f}")
+            
+            seller_player = seller_players[i]
+            seller_rating = seller_club.evaluate_player(seller_player)
+            print(f"{seller_name}: {seller_player.name:<25} = {seller_rating:6.1f}")
+            print()
+    
+    return buyer_club, seller_club
 
 
-def run_football_negotiation(buyer_club, seller_club, mediator):
-    """Führt eine Verhandlung mit erweiterten Statistiken durch"""
-
+def run_club_negotiation(buyer_club, seller_club, mediator):
+    """
+    Führt die Club-Verhandlung mit erweiterten Statistiken durch
+    
+    Args:
+        buyer_club: Käufer-Club-Agent
+        seller_club: Verkäufer-Club-Agent
+        mediator: Club-basierter Mediator
+    """
     max_rounds = NEGOTIATION_CONFIG["MAX_ROUNDS"]
-    analyzer = NegotiationAnalyzer()
     start_time = time.time()
-
-    # Initiale Spieler-Zuordnung
-    current_squad = mediator.init_squads()
-    initial_squad = current_squad.copy()
-
-    print("=" * 70)
-    print("SPIELER-VERHANDLUNG GESTARTET")
-    print("=" * 70)
+    
+    print("\n" + "="*70)
+    print("🚀 CLUB-VERHANDLUNG GESTARTET")
+    print("="*70)
     print(f"Käufer: {buyer_club.club_name}")
     print(f"Verkäufer: {seller_club.club_name}")
-    print(f"Anzahl Spieler: {len(current_squad)}")
     print(f"Max. Runden: {max_rounds:,}")
-    print()
-
-    print("Start-Lineup:", current_squad)
-    print(f"Start-Utility {buyer_club.club_name}: ", end="")
-    buyer_club.print_utility(current_squad)
-    print(f", {seller_club.club_name}: ", end="")
-    seller_club.print_utility(current_squad)
-    print("\n")
-
-    # Zeige detaillierte Start-Informationen
-    if LOGGING_CONFIG.get("SHOW_DETAILED_START_INFO", False):
-        print("BEISPIEL SPIELER:")
-        num_examples = LOGGING_CONFIG.get("NUM_EXAMPLE_PLAYERS", 5)
-        for i in range(min(num_examples, len(buyer_club.players))):
-            player = buyer_club.players[i]
-            buyer_rating = buyer_club.evaluate_player(player)
-            seller_rating = seller_club.evaluate_player(player)
-            print(
-                f"  {i:2d}: {player.name:<25} | Käufer: {buyer_rating:6.1f} | Verkäufer: {seller_rating:6.1f}"
-            )
-        print()
-
+    
+    # Initiale Squad-Aufstellungen für beide Clubs
+    buyer_squad, seller_squad = mediator.init_squads()
+    initial_buyer_squad = buyer_squad.copy()
+    initial_seller_squad = seller_squad.copy()
+    
+    print(f"\n📋 START-AUFSTELLUNGEN:")
+    print(f"{buyer_club.club_name}: {buyer_squad}")
+    print(f"{seller_club.club_name}: {seller_squad}")
+    
+    # Initiale Utility-Bewertungen
+    print(f"\n💯 START-UTILITIES:")
+    buyer_utility = buyer_club.evaluate_squad(buyer_squad)
+    seller_utility = seller_club.evaluate_squad(seller_squad)
+    print(f"{buyer_club.club_name}: {buyer_utility:.2f}")
+    print(f"{seller_club.club_name}: {seller_utility:.2f}")
+    
+    # Verhandlungs-Schleife
     accepted_swaps = 0
     last_progress_round = 0
-
-    # Hauptschleife
+    
     for round_num in range(max_rounds):
-        # Wähle Art des Vorschlags basierend auf Konfiguration
+        # Bestimme Art des Vorschlags
         shuffle_freq = NEGOTIATION_CONFIG.get("TEAM_SHUFFLE_FREQUENCY", 0.01)
         if round_num % round(1 / shuffle_freq) == 0:
+            # Team-Shuffle mit konfigurierbarem Prozentsatz
             shuffle_pct = NEGOTIATION_CONFIG.get("SHUFFLE_PERCENTAGE", 0.2)
-            proposal = mediator.propose_team_shuffle(current_squad, shuffle_pct)
-        else:
-            proposal = mediator.propose_player_swap(current_squad)
-
-        # Beide Vereine abstimmen lassen
-        buyer_vote = buyer_club.vote(current_squad, proposal)
-        seller_vote = seller_club.vote(current_squad, proposal)
-
-        # Swap wird nur akzeptiert, wenn beide Vereine zustimmen
-        if buyer_vote and seller_vote:
-            current_squad = proposal
-            accepted_swaps += 1
-
-            # Protokolliere für Analyse
-            buyer_utility = buyer_club.evaluate_squad(current_squad)
-            seller_utility = seller_club.evaluate_squad(current_squad)
-            analyzer.record_swap(
-                round_num,
-                current_squad,
-                buyer_utility,
-                seller_utility,
-                buyer_club.t,
-                seller_club.t,
-                accepted_swaps,
-                round_num + 1,
+            proposed_buyer, proposed_seller = mediator.propose_team_shuffle(
+                buyer_squad, seller_squad, shuffle_pct
             )
-
-            # Fortschritt basierend auf Konfiguration
-            swap_interval = NEGOTIATION_CONFIG.get("PROGRESS_INTERVAL_SWAPS", 250)
-            if accepted_swaps % swap_interval == 0 or accepted_swaps == 1:
-                print(f"\n{'-'*50}")
-                print(f"Runde {round_num:,}, Akzeptierte Swaps: {accepted_swaps:,}")
-                print(f"{'-'*50}")
-                print(f"Squad: {current_squad[:10]}...")
-                print(f"Utility {buyer_club.club_name}: ", end="")
-                buyer_club.print_utility(current_squad)
-                print(f", {seller_club.club_name}: ", end="")
-                seller_club.print_utility(current_squad)
-                print()
-
-                # Temperatur-Info
-                if LOGGING_CONFIG.get("SHOW_TEMPERATURE_UPDATES", False):
-                    print(
-                        f"Temperaturen: Käufer={buyer_club.t:.2f}, Verkäufer={seller_club.t:.2f}"
-                    )
-
-                # Beispiel-Wechsel
-                num_changes = LOGGING_CONFIG.get("NUM_EXAMPLE_CHANGES", 3)
-                changed_positions = [
-                    i for i in range(len(current_squad)) if current_squad[i] != i
-                ][:num_changes]
-                if changed_positions:
-                    print("Beispiel Wechsel:")
-                    for pos in changed_positions:
-                        player = buyer_club.players[current_squad[pos]]
-                        print(f"  Pos {pos:2d}: {player.name} ({player.club})")
-
+        else:
+            # Einfacher Spieler-Swap
+            proposed_buyer, proposed_seller = mediator.propose_player_swap(
+                buyer_squad, seller_squad
+            )
+        
+        # Beide Clubs abstimmen lassen
+        buyer_vote = buyer_club.vote(buyer_squad, proposed_buyer)
+        seller_vote = seller_club.vote(seller_squad, proposed_seller)
+        
+        # Swap wird nur akzeptiert wenn beide Clubs zustimmen
+        if buyer_vote and seller_vote:
+            buyer_squad = proposed_buyer
+            seller_squad = proposed_seller
+            accepted_swaps += 1
+            
+            # Fortschritts-Anzeige
+            if accepted_swaps % NEGOTIATION_CONFIG.get("PROGRESS_INTERVAL_SWAPS", 250) == 0:
+                print_negotiation_progress(
+                    round_num, accepted_swaps, buyer_club, seller_club,
+                    buyer_squad, seller_squad
+                )
                 last_progress_round = round_num
-
-        # Zeige Fortschritt alle X Runden (falls wenige Swaps)
+        
+        # Runden-basierte Fortschritts-Anzeige
         round_interval = NEGOTIATION_CONFIG.get("PROGRESS_INTERVAL_ROUNDS", 2000)
         if round_num % round_interval == 0 and round_num > last_progress_round:
             acceptance_rate = accepted_swaps / (round_num + 1) * 100
-            print(
-                f"Runde {round_num:,}: {accepted_swaps:,} Swaps (~{acceptance_rate:.1f}%)"
-            )
-
-    # Finale Analyse und Ausgabe
-    print("\n" + "=" * 70)
-    print("VERHANDLUNGS-ENDERGEBNIS")
-    print("=" * 70)
-    print(f"Finaler Squad: {current_squad}")
-    print(f"\nEnd-Utility {buyer_club.club_name}: ", end="")
-    buyer_club.print_utility(current_squad)
-    print(f", {seller_club.club_name}: ", end="")
-    seller_club.print_utility(current_squad)
-    print(f"\n\nBASIS-STATISTIKEN:")
-    print(f"- Akzeptierte Swaps: {accepted_swaps:,} von {max_rounds:,}")
-    print(f"- Akzeptanzrate: {accepted_swaps/max_rounds*100:.2f}%")
-
-    # Zeige erweiterte Statistiken
-    print_extended_statistics(
-        analyzer,
-        buyer_club,
-        seller_club,
-        initial_squad,
-        current_squad,
-        start_time,
-        accepted_swaps,
-        max_rounds,
+            print(f"Runde {round_num:,}: {accepted_swaps:,} Swaps (~{acceptance_rate:.1f}%)")
+    
+    # Finale Ergebnisse
+    print_final_negotiation_results(
+        buyer_club, seller_club, initial_buyer_squad, initial_seller_squad,
+        buyer_squad, seller_squad, accepted_swaps, max_rounds, start_time
     )
+
+
+def print_negotiation_progress(
+    round_num, accepted_swaps, buyer_club, seller_club, 
+    buyer_squad, seller_squad
+):
+    """
+    Zeigt Fortschritt der Verhandlung an
+    """
+    print(f"\n{'-'*50}")
+    print(f"📍 Runde {round_num:,}, Akzeptierte Swaps: {accepted_swaps:,}")
+    print(f"{'-'*50}")
+    
+    # Aktuelle Utilities
+    buyer_utility = buyer_club.evaluate_squad(buyer_squad)
+    seller_utility = seller_club.evaluate_squad(seller_squad)
+    print(f"💯 Aktuelle Utilities:")
+    print(f"   {buyer_club.club_name}: {buyer_utility:.2f}")
+    print(f"   {seller_club.club_name}: {seller_utility:.2f}")
+    
+    # Temperatur-Info
+    if LOGGING_CONFIG.get("SHOW_TEMPERATURE_UPDATES", False):
+        print(f"🌡️ Temperaturen:")
+        print(f"   {buyer_club.club_name}: {buyer_club.t:.2f}")
+        print(f"   {seller_club.club_name}: {seller_club.t:.2f}")
+    
+    # Beispiel aktuelle Aufstellungen (erste 5 Positionen)
+    print(f"📋 Aktuelle Front-Aufstellungen:")
+    buyer_front = buyer_squad[:5]
+    seller_front = seller_squad[:5]
+    print(f"   {buyer_club.club_name}: {buyer_front}")
+    print(f"   {seller_club.club_name}: {seller_front}")
+
+
+def print_final_negotiation_results(
+    buyer_club, seller_club, initial_buyer_squad, initial_seller_squad,
+    final_buyer_squad, final_seller_squad, accepted_swaps, max_rounds, start_time
+):
+    """
+    Zeigt ausführliche finale Verhandlungsergebnisse
+    """
+    end_time = time.time()
+    duration = end_time - start_time
+    
+    print("\n" + "="*70)
+    print("🏁 FINALE VERHANDLUNGS-ERGEBNISSE")
+    print("="*70)
+    
+    # Finale Aufstellungen
+    print(f"🎯 FINALE SQUADS:")
+    print(f"{buyer_club.club_name}: {final_buyer_squad}")
+    print(f"{seller_club.club_name}: {final_seller_squad}")
+    
+    # Finale Utilities
+    final_buyer_utility = buyer_club.evaluate_squad(final_buyer_squad)
+    final_seller_utility = seller_club.evaluate_squad(final_seller_squad)
+    initial_buyer_utility = buyer_club.evaluate_squad(initial_buyer_squad)
+    initial_seller_utility = seller_club.evaluate_squad(initial_seller_squad)
+    
+    print(f"\n💯 UTILITY-ENTWICKLUNG:")
+    print(f"{buyer_club.club_name}:")
+    print(f"   Start: {initial_buyer_utility:.2f}")
+    print(f"   Ende:  {final_buyer_utility:.2f}")
+    print(f"   Δ:     {final_buyer_utility - initial_buyer_utility:+.2f}")
+    
+    print(f"{seller_club.club_name}:")
+    print(f"   Start: {initial_seller_utility:.2f}")  
+    print(f"   Ende:  {final_seller_utility:.2f}")
+    print(f"   Δ:     {final_seller_utility - initial_seller_utility:+.2f}")
+    
+    # Verhandlungs-Statistiken
+    print(f"\n📊 VERHANDLUNGS-STATISTIKEN:")
+    print(f"Akzeptierte Swaps: {accepted_swaps:,} von {max_rounds:,}")
+    print(f"Akzeptanzrate: {accepted_swaps/max_rounds*100:.2f}%")
+    print(f"Verhandlungsdauer: {duration:.2f} Sekunden")
+    print(f"Runden/Sekunde: {max_rounds/duration:.0f}")
+    
+    # Analyse der Verhandlung
+    analyze_negotiation_outcome(
+        buyer_club, seller_club, initial_buyer_squad, initial_seller_squad,
+        final_buyer_squad, final_seller_squad
+    )
+
+
+def analyze_negotiation_outcome(
+    buyer_club, seller_club, initial_buyer_squad, initial_seller_squad,
+    final_buyer_squad, final_seller_squad
+):
+    """
+    Analysiert das Verhandlungsergebnis im Detail
+    """
+    if not ANALYSIS_CONFIG.get("ANALYZE_POSITION_PREFERENCES", True):
+        return
+    
+    print(f"\n🔍 VERHANDLUNGS-ANALYSE:")
+    print("-" * 50)
+    
+    # Analysiere Positions-Änderungen
+    buyer_changes = sum(
+        1 for i in range(len(final_buyer_squad))
+        if initial_buyer_squad[i] != final_buyer_squad[i]
+    )
+    seller_changes = sum(
+        1 for i in range(len(final_seller_squad))
+        if initial_seller_squad[i] != final_seller_squad[i]
+    )
+    
+    print(f"Positions-Änderungen:")
+    print(f"   {buyer_club.club_name}: {buyer_changes}/{len(final_buyer_squad)} ({buyer_changes/len(final_buyer_squad)*100:.1f}%)")
+    print(f"   {seller_club.club_name}: {seller_changes}/{len(final_seller_squad)} ({seller_changes/len(final_seller_squad)*100:.1f}%)")
+    
+    # Wer hat "gewonnen"?
+    buyer_improvement = buyer_club.evaluate_squad(final_buyer_squad) - buyer_club.evaluate_squad(initial_buyer_squad)
+    seller_improvement = seller_club.evaluate_squad(final_seller_squad) - seller_club.evaluate_squad(initial_seller_squad)
+    
+    print(f"\n🏆 VERHANDLUNGS-GEWINNER:")
+    if buyer_improvement > seller_improvement:
+        print(f"   {buyer_club.club_name} hat mehr profitiert (+{buyer_improvement:.2f})")
+    elif seller_improvement > buyer_improvement:
+        print(f"   {seller_club.club_name} hat mehr profitiert (+{seller_improvement:.2f})")
+    else:
+        print(f"   Ausgeglichenes Ergebnis (beide ~+{buyer_improvement:.2f})")
+    
+    # Temperatur-Endwerte
+    print(f"\n🌡️ FINALE TEMPERATUREN:")
+    print(f"   {buyer_club.club_name}: {buyer_club.t:.3f}")
+    print(f"   {seller_club.club_name}: {seller_club.t:.3f}")
 
 
 def main():
-    """Hauptfunktion mit Konfiguration"""
-    print("=" * 70)
-    print("FUßBALL-VERHANDLUNGSSYSTEM")
-    print("=" * 70)
-    print("Konfiguration: config.py")
-    print("Alle Parameter vollständig anpassbar!")
-    print()
-
-    # Zeige Konfigurations-Übersicht
-    print_config_summary()
-
-    # Lade Spielerdaten basierend auf Konfiguration
-    print("Lade Spielerdaten...")
-    csv_file = SYSTEM_CONFIG["CSV_FILE_PATH"]
-    max_players = SYSTEM_CONFIG["MAX_PLAYERS"]
-
+    """
+    Hauptfunktion des Club-basierten Verhandlungssystems
+    """
+    print("="*70)
+    print("🏟️ CLUB-BASIERTES FUßBALL-VERHANDLUNGSSYSTEM")
+    print("="*70)
+    print("Echte Club-Verhandlungen mit realistischen Squads")
+    print("Vollständig konfigurierbar über config.py")
+    print("="*70)
+    
     try:
-        players = PlayerDataLoader.load_from_csv(csv_file, max_players=max_players)
-        print(f"CSV erfolgreich geladen: {csv_file}")
-    except:
-        if SYSTEM_CONFIG.get("AUTO_CREATE_SAMPLE_DATA", True):
-            print("Erstelle automatisch Beispieldaten...")
-            players = PlayerDataLoader._create_sample_players(max_players)
-        else:
-            print("❌ Keine Spielerdaten verfügbar!")
-            return
-
-    print(f"Geladen: {len(players)} Spieler\n")
-
-    # Erstelle Vereine basierend auf Konfiguration
-    print("Erstelle Vereine...")
-    buyer_club = BuyerClubAgent(BUYER_CONFIG["CLUB_NAME"])
-    seller_club = SellerClubAgent(SELLER_CONFIG["CLUB_NAME"])
-
-    # Setze Spielerdaten
-    buyer_club.set_players(players)
-    seller_club.set_players(players)
-
-    # Zeige Vereins-Info
-    print(f"- {buyer_club.club_name}: Offensive & Technik (GEHEIM)")
-    print(f"- {seller_club.club_name}: Defensive & Vielseitigkeit (GEHEIM)")
-    print(f"- Käufer bevorzugt späte Positionen (Angriff)")
-    print(f"- Verkäufer bevorzugt frühe Positionen (Defense)")
-
-    # Erstelle Mediator
-    print("\nErstelle Mediator...")
-    mediator = FootballMediator(
-        buyer_club.get_contract_size(), seller_club.get_contract_size()
-    )
-
-    # Validiere Konfiguration
-    if DEBUG_CONFIG.get("VALIDATE_CONFIG", True):
-        print("✅ Konfiguration validiert")
-
-    # Starte Verhandlung
-    print("\nStarte Verhandlung...\n")
-    run_football_negotiation(buyer_club, seller_club, mediator)
-
-
-if __name__ == "__main__":
-    try:
-        main()
+        # 1. Lade Club-Daten und validiere
+        (buyer_players, seller_players), (buyer_name, seller_name) = load_club_data_with_validation()
+        
+        # 2. Zeige transparente Club-Zielfunktionen
+        print_club_objectives_transparent()
+        
+        # 3. Erstelle Club-Agenten mit Daten
+        buyer_club, seller_club = create_club_agents_with_data(
+            buyer_players, seller_players, buyer_name, seller_name
+        )
+        
+        # 4. Erstelle Club-basierten Mediator
+        print(f"\n🔗 ERSTELLE MEDIATOR...")
+        mediator = ClubBasedFootballMediator(
+            len(buyer_players), len(seller_players)
+        )
+        
+        # 5. Validiere Mediator-Statistiken
+        mediator_stats = mediator.get_negotiation_statistics()
+        print(f"✅ Mediator konfiguriert:")
+        for key, value in mediator_stats.items():
+            print(f"   {key}: {value}")
+        
+        # 6. Starte Club-Verhandlung
+        print(f"\n🚀 STARTE CLUB-VERHANDLUNG...")
+        run_club_negotiation(buyer_club, seller_club, mediator)
+        
+        print(f"\n🎉 VERHANDLUNG ERFOLGREICH ABGESCHLOSSEN!")
+        
+    except KeyboardInterrupt:
+        print(f"\n⚠️ Verhandlung durch Benutzer abgebrochen")
     except Exception as e:
         print(f"\n❌ Kritischer Fehler: {e}")
         if DEBUG_CONFIG.get("DEBUG_MODE", False):
             import traceback
-
             traceback.print_exc()
+        return False
+    
+    return True
+
+
+if __name__ == "__main__":
+    success = main()
+    if not success:
+        exit(1)
