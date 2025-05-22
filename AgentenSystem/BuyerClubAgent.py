@@ -1,33 +1,74 @@
 import math
 import random
-from typing import List
+from typing import List, Dict, Optional # Optional und Dict hinzugefügt
 from PlayerAgent import FootballAgent, Player
-from config import BUYER_CONFIG, SA_CONFIG, UTILITY_CONFIG, LOGGING_CONFIG
+from config import CLUB_CONFIG, BUYER_CONFIG, SA_CONFIG, UTILITY_CONFIG, LOGGING_CONFIG # CLUB_CONFIG hinzugefügt
 
 
 class BuyerClubAgent(FootballAgent):
     """
-    Käufer-Verein: Konfigurierbar über config.py
-    Geheime Strategie: Bevorzugt technische und offensive Spieler
+    Repräsentiert einen Käufer-Club-Agenten im Fußball-Verhandlungssystem.
+
+    Diese Klasse erbt von `FootballAgent` und implementiert die spezifische Logik und
+    Strategie für einen Käufer-Club. Die Konfiguration des Agenten (z.B. Attribut-
+    und Positionsgewichtungen, Simulated-Annealing-Parameter) erfolgt primär über
+    die `BUYER_CONFIG` und `SA_CONFIG` aus der zentralen Konfigurationsdatei (`config.py`).
+    Die Strategie des Käufers ist typischerweise darauf ausgerichtet, offensive und
+    technisch versierte Spieler zu bevorzugen.
+
+    Attribute:
+        attribute_weights_dict (Dict[str, float]): Ein Dictionary, das die Roh-Gewichtungen
+            für Spielerattribute enthält, entweder aus der Konfiguration oder als Override.
     """
 
-    def __init__(self, club_name: str = None):
-        # Verwende Namen aus Konfiguration falls nicht anderweitig angegeben
-        if club_name is None:
-            club_name = BUYER_CONFIG["CLUB_NAME"]
-        super().__init__(club_name)
+    def __init__(self, club_name: str = None, attribute_weights_override: Optional[Dict[str, float]] = None):
+        """
+        Initialisiert den BuyerClubAgent.
 
-        # Überschreibe SA-Parameter mit Konfigurationswerten
-        self.t = SA_CONFIG["INITIAL_TEMPERATURE"]
+        Args:
+            club_name (str, optional): Der Name des Clubs. Wenn None, wird der Name aus
+                `BUYER_CONFIG` oder `CLUB_CONFIG` geladen.
+            attribute_weights_override (Optional[Dict[str, float]], optional): Ein Dictionary,
+                das verwendet werden kann, um die Attributgewichtungen zur Laufzeit zu überschreiben.
+                Wenn None, werden die Gewichtungen aus `BUYER_CONFIG` verwendet.
+        """
+        # Bestimme den zu verwendenden Club-Namen.
+        # Priorität: 1. Übergebener club_name, 2. BUYER_CONFIG["CLUB_NAME"], 3. CLUB_CONFIG["BUYER_CLUB_NAME"]
+        resolved_club_name = club_name
+        if resolved_club_name is None:
+            resolved_club_name = BUYER_CONFIG.get("CLUB_NAME") # Versuche spezifische Käufer-Club-Benennung
+            if resolved_club_name is None: # Falls nicht in BUYER_CONFIG gesetzt
+                 resolved_club_name = CLUB_CONFIG.get("BUYER_CLUB_NAME", "Standard Käufer Club") # Fallback auf globale Config
+        
+        super().__init__(resolved_club_name) # Rufe Konstruktor der Basisklasse auf.
+
+        # Speichere die Quelle der Attributgewichtungen (Override oder Standardkonfiguration).
+        if attribute_weights_override is not None:
+            self.attribute_weights_dict: Dict[str, float] = attribute_weights_override
+            # Optional: Logging der Verwendung von überschriebenen Gewichten.
+            # print(f"[{self.club_name}] Verwendet überschriebene Attributgewichtungen.")
+        else:
+            self.attribute_weights_dict: Dict[str, float] = BUYER_CONFIG["ATTRIBUTE_WEIGHTS"]
+            # Optional: Logging der Verwendung von Standardgewichten.
+            # print(f"[{self.club_name}] Verwendet Standard-Attributgewichtungen aus BUYER_CONFIG.")
+        
+        # Initialisiere die normalisierte `self.attribute_weights`-Liste erneut,
+        # da `_init_attribute_weights` (von super().__init__ aufgerufen) nun
+        # `self.attribute_weights_dict` verwenden kann.
+        self.attribute_weights = self._init_attribute_weights()
+
+        # Setze spezifische Simulated Annealing (SA) Parameter aus der Konfiguration.
+        self.t = SA_CONFIG.get("INITIAL_TEMPERATURE", 50.0) # Standardwert falls nicht in Config
         self.mind_ac_rate = SA_CONFIG["MIN_ACCEPTANCE_RATE"]
         self.max_iter = SA_CONFIG["MAX_ITERATIONS"]
         self.max_sim = SA_CONFIG["CALIBRATION_ITERATIONS"]
 
     def _init_attribute_weights(self) -> List[float]:
         """
-        Lädt Gewichtungen aus der Konfigurationsdatei
+        Lädt Gewichtungen aus der Konfigurationsdatei (oder verwendet das Override-Dict).
+        Uses self.attribute_weights_dict which is set in __init__.
         """
-        weights_dict = BUYER_CONFIG["ATTRIBUTE_WEIGHTS"]
+        weights_dict = self.attribute_weights_dict # Use the stored dictionary
 
         # Konvertiere Dictionary zu Liste in korrekter Reihenfolge
         attribute_order = [
@@ -69,12 +110,29 @@ class BuyerClubAgent(FootballAgent):
         """
         return BUYER_CONFIG["POSITION_WEIGHTS"].copy()
 
-    def vote(self, current_squad: List[int], proposed_squad: List[int]) -> bool:
+    def vote(self, player_to_give: Player, player_to_receive: Player) -> bool:
         """
-        Käufer-Entscheidung mit konfigurierbarem Simulated Annealing
+        Käufer-Entscheidung für einen Inter-Club Spieler-Tausch mit konfigurierbarem Simulated Annealing.
+        Bewertet den Tausch basierend auf der Änderung der Team-Utility.
         """
-        current_utility = self.evaluate_squad(current_squad)
-        proposed_utility = self.evaluate_squad(proposed_squad)
+        # Current utility of the agent's actual squad
+        current_utility = self.calculate_utility_for_hypothetical_squad(self.players)
+
+        # Create a hypothetical squad list after the trade
+        hypothetical_squad_players = self.players.copy()
+        
+        player_to_give_index = self.get_player_index(player_to_give)
+        
+        if player_to_give_index is None:
+            print(f"⚠️ [{self.club_name}] Spieler zum Abgeben ({player_to_give.name}) nicht im eigenen Kader gefunden. Tausch abgelehnt.")
+            return False # Reject if the player to give isn't found
+
+        # Remove player_to_give and add player_to_receive
+        # Ensure to remove by index if that's how player_to_give was identified from self.players
+        del hypothetical_squad_players[player_to_give_index]
+        hypothetical_squad_players.append(player_to_receive)
+        
+        proposed_utility = self.calculate_utility_for_hypothetical_squad(hypothetical_squad_players)
 
         self.cur_iter += 1
 
