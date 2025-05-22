@@ -6,13 +6,19 @@ from config import SYSTEM_CONFIG, CLUB_CONFIG, DISPLAY_CONFIG
 
 class ClubBasedPlayerDataLoader:
     """
-    Lädt Spielerdaten aus CSV-Dateien mit Club-basierter Auswahl
-    
-    Das neue System:
-    1. Lädt alle Spieler aus der CSV
-    2. Filtert nach den konfigurierten Club-Namen  
-    3. Behandelt unterschiedliche Squad-Größen intelligent
-    4. Validiert die Ergebnisse
+    Verantwortlich für das Laden, Verarbeiten und Validieren von Spielerdaten aus CSV-Dateien.
+    Diese Klasse ermöglicht eine Club-basierte Auswahl von Spielern und bietet Mechanismen
+    zur Handhabung von unterschiedlich großen Kadern sowie zur Datenbereinigung.
+
+    Hauptfunktionen:
+    1. Laden aller Spieler aus einer spezifizierten CSV-Datei.
+    2. Filtern der Spieler basierend auf konfigurierten Club-Namen (Käufer und Verkäufer).
+    3. Anwenden von Strategien zum Umgang mit unterschiedlichen Kadergrößen (z.B. Auffüllen, Kürzen).
+    4. Validierung der geladenen Daten und Kadergrößen anhand definierter Mindestanforderungen.
+    5. Bereinigung von Rohdaten aus der CSV, um Konsistenz sicherzustellen.
+    6. Erstellung von Beispiel-Kadern, falls die Datenquelle nicht verfügbar ist und dies konfiguriert wurde.
+
+    Alle Operationen werden als statische Methoden implementiert, da die Klasse primär als Utility-Sammlung dient.
     """
 
     @staticmethod
@@ -25,77 +31,89 @@ class ClubBasedPlayerDataLoader:
         Lädt Spielerdaten für zwei spezifische Clubs aus der CSV
         
         Args:
-            buyer_club_name: Name des Käufer-Clubs (aus CSV)
-            seller_club_name: Name des Verkäufer-Clubs (aus CSV)  
-            file_path: Pfad zur CSV-Datei
+            buyer_club_name (str, optional): Name des Käufer-Clubs. 
+                Standardmäßig aus `CLUB_CONFIG`.
+            seller_club_name (str, optional): Name des Verkäufer-Clubs. 
+                Standardmäßig aus `CLUB_CONFIG`.
+            file_path (str, optional): Pfad zur CSV-Datei. 
+                Standardmäßig aus `SYSTEM_CONFIG`.
             
         Returns:
-            Tuple[List[Player], List[Player]]: (Käufer-Spieler, Verkäufer-Spieler)
+            Tuple[List[Player], List[Player]]: Ein Tupel, das zwei Listen von Spieler-Objekten enthält:
+                (Liste der Spieler des Käufer-Clubs, Liste der Spieler des Verkäufer-Clubs).
             
         Raises:
-            FileNotFoundError: Wenn CSV nicht gefunden wird
-            ValueError: Wenn Club nicht genügend Spieler hat
+            FileNotFoundError: Wird ausgelöst, wenn die angegebene CSV-Datei nicht gefunden wird und
+                `FALLBACK_TO_SAMPLE_DATA` deaktiviert ist.
+            ValueError: Wird ausgelöst, wenn ein Club nicht genügend Spieler gemäß 
+                `MIN_PLAYERS_REQUIRED` hat und `FALLBACK_TO_SAMPLE_DATA` deaktiviert ist 
+                (obwohl die aktuelle Implementierung dies eher durch Logging handhabt und ggf. leere Listen liefert).
         """
-        # Lade Konfiguration falls Parameter nicht gesetzt
-        if buyer_club_name is None:
-            buyer_club_name = CLUB_CONFIG["BUYER_CLUB_NAME"]
-        if seller_club_name is None:
-            seller_club_name = CLUB_CONFIG["SELLER_CLUB_NAME"]
-        if file_path is None:
-            file_path = SYSTEM_CONFIG["CSV_FILE_PATH"]
+        # Lade Konfigurationswerte, falls keine spezifischen Parameter übergeben wurden.
+        # Dies ermöglicht Flexibilität beim Aufruf der Methode.
+        effective_buyer_club_name = buyer_club_name or CLUB_CONFIG["BUYER_CLUB_NAME"]
+        effective_seller_club_name = seller_club_name or CLUB_CONFIG["SELLER_CLUB_NAME"]
+        effective_file_path = file_path or SYSTEM_CONFIG["CSV_FILE_PATH"]
         
         print("=" * 70)
         print("CLUB-BASIERTE SPIELER-AUSWAHL")
         print("=" * 70)
-        print(f"CSV Datei: {file_path}")
-        print(f"Käufer Club: {buyer_club_name}")
-        print(f"Verkäufer Club: {seller_club_name}")
+        print(f"CSV Datei: {effective_file_path}")
+        print(f"Käufer Club: {effective_buyer_club_name}")
+        print(f"Verkäufer Club: {effective_seller_club_name}")
         print()
         
         try:
-            # 1. Lade alle Spieler aus der CSV
-            all_players = ClubBasedPlayerDataLoader._load_all_players_from_csv(file_path)
+            # Schritt 1: Lade alle Spieler aus der CSV-Datei.
+            all_players = ClubBasedPlayerDataLoader._load_all_players_from_csv(effective_file_path)
             
-            # 2. Filtere nach Club-Namen
+            # Schritt 2: Filtere Spieler basierend auf den Club-Namen.
             buyer_players = ClubBasedPlayerDataLoader._filter_players_by_club(
-                all_players, buyer_club_name
+                all_players, effective_buyer_club_name
             )
             seller_players = ClubBasedPlayerDataLoader._filter_players_by_club(
-                all_players, seller_club_name
+                all_players, effective_seller_club_name
             )
             
-            # 3. Zeige Statistiken
+            # Schritt 3: Zeige grundlegende Statistiken für die gefundenen Spieler.
             ClubBasedPlayerDataLoader._print_club_statistics(
-                buyer_club_name, buyer_players, seller_club_name, seller_players
+                effective_buyer_club_name, buyer_players, 
+                effective_seller_club_name, seller_players
             )
             
-            # 4. Validiere Squad-Größen
+            # Schritt 4: Validiere die Kadergrößen gegen die Mindestanforderungen.
+            # Diese Methode könnte eine Exception auslösen, wenn FALLBACK_TO_SAMPLE_DATA False ist.
             ClubBasedPlayerDataLoader._validate_squad_sizes(
-                buyer_club_name, buyer_players, seller_club_name, seller_players
+                effective_buyer_club_name, buyer_players, 
+                effective_seller_club_name, seller_players
             )
             
-            # 5. Behandle unterschiedliche Squad-Größen
+            # Schritt 5: Behandle Unterschiede in den Kadergrößen gemäß der konfigurierten Strategie.
             buyer_players, seller_players = ClubBasedPlayerDataLoader._handle_squad_size_differences(
-                buyer_club_name, buyer_players, seller_club_name, seller_players
+                effective_buyer_club_name, buyer_players, 
+                effective_seller_club_name, seller_players
             )
             
-            # 6. Finale Validierung und Info
+            # Schritt 6: Zeige finale Informationen zu den aufbereiteten Kadern.
             ClubBasedPlayerDataLoader._print_final_squad_info(
-                buyer_club_name, buyer_players, seller_club_name, seller_players
+                effective_buyer_club_name, buyer_players, 
+                effective_seller_club_name, seller_players
             )
             
             return buyer_players, seller_players
             
         except FileNotFoundError:
-            print(f"❌ Fehler: CSV-Datei nicht gefunden: {file_path}")
+            # Fehlerbehandlung, falls die CSV-Datei nicht gefunden wird.
+            print(f"❌ Fehler: CSV-Datei nicht gefunden unter: {effective_file_path}")
             
-            # Fallback zu Beispieldaten?
+            # Optionale Erstellung von Beispieldaten als Fallback.
             if CLUB_CONFIG.get("FALLBACK_TO_SAMPLE_DATA", True):
-                print("🔄 Erstelle Beispieldaten für beide Clubs...")
+                print("🔄 Erstelle Beispieldaten für beide Clubs als Fallback...")
                 return ClubBasedPlayerDataLoader._create_sample_clubs(
-                    buyer_club_name, seller_club_name
+                    effective_buyer_club_name, effective_seller_club_name
                 )
             else:
+                # Wenn kein Fallback erwünscht ist, wird die Exception weitergereicht.
                 raise
     
     @staticmethod
@@ -104,33 +122,54 @@ class ClubBasedPlayerDataLoader:
         Lädt alle Spieler aus der CSV-Datei
         
         Args:
-            file_path: Pfad zur CSV-Datei
+            file_path (str): Der Pfad zur CSV-Datei, die die Spielerdaten enthält.
             
         Returns:
-            List[Player]: Alle Spieler aus der CSV
+            List[Player]: Eine Liste von `Player`-Objekten, die aus der CSV-Datei erstellt wurden.
+                          Gibt eine leere Liste zurück, wenn die Datei nicht gelesen werden kann oder leer ist.
+        
+        Hinweis:
+            Verwendet die in `SYSTEM_CONFIG` definierte Zeichenkodierung und das Trennzeichen ';'.
+            Fehlerhafte Zeilen werden übersprungen und eine Warnung wird ausgegeben.
         """
-        players = []
+        players = [] # Initialisiere eine leere Liste für die Spielerobjekte.
+        # Hole die konfigurierte Zeichenkodierung; Standard ist "utf-8".
         encoding = SYSTEM_CONFIG.get("CSV_ENCODING", "utf-8")
         
-        print("🔄 Lade alle Spieler aus CSV...")
+        print(f"🔄 Lade alle Spieler aus CSV-Datei: {file_path} (Encoding: {encoding})...")
         
-        with open(file_path, "r", encoding=encoding) as file:
-            reader = csv.DictReader(file)
+        try:
+            with open(file_path, "r", encoding=encoding) as file:
+                # Verwende csv.DictReader für einfachen Zugriff auf Spalten per Namen.
+                # Das Trennzeichen ist ';' wie in der Datei verwendet.
+                reader = csv.DictReader(file, delimiter=';')
+                
+                for row_num, row_data_dict in enumerate(reader, 1):
+                    try:
+                        # Bereinige die eingelesenen Rohdaten der Zeile.
+                        cleaned_row = ClubBasedPlayerDataLoader._clean_row(row_data_dict)
+                        
+                        # Erstelle ein Player-Objekt aus den bereinigten Daten.
+                        # Die 'player'-Spalte wird für den Namen des Spielers verwendet.
+                        player_name = cleaned_row.get("player", f"Unbekannter Spieler Zeile {row_num}")
+                        player = Player(player_name, cleaned_row)
+                        players.append(player)
+                        
+                    except KeyError as ke:
+                        # Spezifische Fehlermeldung für fehlende, aber erwartete Schlüssel.
+                        print(f"⚠️ Warnung: Fehlender Schlüssel '{ke}' in Zeile {row_num}. Überspringe Zeile.")
+                        continue
+                    except Exception as e:
+                        # Allgemeine Fehlermeldung für andere Probleme beim Verarbeiten einer Zeile.
+                        print(f"⚠️ Warnung: Fehler beim Verarbeiten von Zeile {row_num}: {e}. Überspringe Zeile.")
+                        continue
             
-            for row_num, row in enumerate(reader, 1):
-                try:
-                    # Bereinige die Daten
-                    cleaned_row = ClubBasedPlayerDataLoader._clean_row(row)
-                    
-                    # Erstelle Spieler-Objekt
-                    player = Player(cleaned_row["player"], cleaned_row)
-                    players.append(player)
-                    
-                except Exception as e:
-                    print(f"⚠️ Warnung: Fehler in Zeile {row_num}: {e}")
-                    continue
-        
-        print(f"✅ {len(players)} Spieler erfolgreich geladen")
+            print(f"✅ {len(players)} Spieler erfolgreich aus CSV geladen.")
+        except Exception as e:
+            # Fehlerbehandlung für Probleme beim Öffnen oder Lesen der Datei.
+            print(f"❌ Kritischer Fehler beim Laden aller Spieler aus CSV: {e}")
+            # In diesem Fall wird eine leere Spielerliste zurückgegeben.
+            
         return players
     
     @staticmethod
@@ -145,32 +184,71 @@ class ClubBasedPlayerDataLoader:
         Returns:
             List[Player]: Spieler die zu diesem Club gehören
         """
-        # Exakte Übereinstimmung
+        # Standard exact match
         exact_matches = [p for p in players if p.club == club_name]
-        
         if exact_matches:
             return exact_matches
+
+        # Specific fallback for "FC Bayern München" due to known encoding issues in CSV
+        # \xfc is the latin-1 encoding for ü
+        if club_name == "FC Bayern München":
+            # Try common variations seen in data that might result from latin1 decode
+            potential_matches = ["FC Bayern M\xfcnchen", "FC Bayern Mðnchen"] 
+            for potential_match in potential_matches:
+                fallback_matches = [p for p in players if p.club == potential_match]
+                if fallback_matches:
+                    print(f"ℹ️ Info: Club '{club_name}' nicht exakt gefunden, aber Übereinstimmung mit '{potential_match}' durch Fallback.")
+                    return fallback_matches
         
-        # Falls keine exakte Übereinstimmung: Suche ähnliche Namen
-        print(f"⚠️ Warnung: Keine exakte Übereinstimmung für '{club_name}'")
-        print("   Suche nach ähnlichen Club-Namen...")
+        # Generic fallback: case-insensitive and partial match
+        print(f"⚠️ Warnung: Keine exakte Übereinstimmung für '{club_name}'. Suche nach ähnlichen Club-Namen...")
         
-        # Case-insensitive Suche
+        # Simplified similar match: case-insensitive exact or substring
+        # This is less complex than full normalization if the above specific fallbacks handle the main problem.
+        club_name_lower = club_name.lower()
         similar_matches = [
             p for p in players 
-            if club_name.lower() in p.club.lower() or p.club.lower() in club_name.lower()
+            if club_name_lower == p.club.lower() # case-insensitive exact
         ]
-        
         if similar_matches:
-            found_clubs = set(p.club for p in similar_matches)
-            print(f"   Gefundene ähnliche Clubs: {found_clubs}")
-            print(f"   Verwende ersten gefundenen Club: {list(found_clubs)[0]}")
-            return [p for p in similar_matches if p.club == list(found_clubs)[0]]
+             print(f"   Gefunden durch case-insensitive exakte Übereinstimmung: '{similar_matches[0].club}'")
+             return similar_matches
+
+        similar_matches_partial = [
+            p for p in players
+            if club_name_lower in p.club.lower() or p.club.lower() in club_name_lower
+        ]
+
+        if similar_matches_partial:
+            # Prefer matches where the found club name is shorter or equal, or starts with the query
+            # This tries to avoid overly broad matches like "FC" matching "FC Porto", "FC Barcelona", etc.
+            # when just "FC" was (mistakenly) searched.
+            # A simple heuristic: pick the one with the smallest length difference, or where query is substring
+            
+            best_match_club_name = None
+            min_len_diff = float('inf')
+
+            grouped_by_found_club = {}
+            for p in similar_matches_partial:
+                if p.club not in grouped_by_found_club:
+                    grouped_by_found_club[p.club] = []
+                grouped_by_found_club[p.club].append(p)
+
+            if grouped_by_found_club:
+                # Select the most common partially matched club name
+                # Or the first one if counts are equal
+                # This is a simple heuristic
+                sorted_found_clubs = sorted(grouped_by_found_club.keys(), key=lambda c: len(grouped_by_found_club[c]), reverse=True)
+                best_match_club_name = sorted_found_clubs[0]
+
+                print(f"   Gefundene ähnliche Clubs (Teilübereinstimmung): {list(grouped_by_found_club.keys())}")
+                print(f"   Verwende Spieler vom ähnlichsten Club: '{best_match_club_name}' basierend auf Teilübereinstimmung mit '{club_name}'.")
+                return grouped_by_found_club[best_match_club_name]
         
-        # Als letzte Option: Alle verfügbaren Clubs anzeigen
-        available_clubs = set(p.club for p in players)
-        print(f"❌ Club '{club_name}' nicht gefunden!")
-        print(f"   Verfügbare Clubs: {sorted(available_clubs)}")
+        # Last resort: show available clubs if no good match found
+        available_clubs = sorted(list(set(p.club for p in players)))
+        print(f"❌ Club '{club_name}' auch nach ähnlicher Suche nicht eindeutig gefunden.")
+        print(f"   Verfügbare Clubs (erste 20): {available_clubs[:20]}...")
         
         return []
     
@@ -426,30 +504,29 @@ class ClubBasedPlayerDataLoader:
     
     @staticmethod
     def _clean_row(row: Dict[str, str]) -> Dict[str, str]:
-        """
-        Bereinigt eine Datenzeile und ersetzt leere Werte
-        
-        Args:
-            row: Rohe CSV-Zeile als Dictionary
-            
-        Returns:
-            Dict[str, str]: Bereinigte Datenzeile
-        """
         cleaned = {}
-        
+        default_unknown_keys = ["player", "country", "club"]
+
         for key, value in row.items():
-            # Entferne Leerzeichen
-            key = key.strip()
-            value = value.strip() if value else "0"
-            
-            # Ersetze leere Werte mit Standardwerten
-            if not value or value == "" or value == "nan":
-                if key in ["player", "country", "club"]:
-                    value = "Unknown"
+            clean_key = key.strip() if isinstance(key, str) else (str(key) if key is not None else "UnknownKey")
+
+            if isinstance(value, str):
+                clean_value = value.strip()
+            elif value is None:
+                clean_value = "" 
+            else:
+                try:
+                    clean_value = str(value).strip()
+                except:
+                    clean_value = "" 
+
+            if not clean_value or clean_value.lower() == "nan":
+                if clean_key in default_unknown_keys:
+                    clean_value = "Unknown"
                 else:
-                    value = "0"
+                    clean_value = "0" 
             
-            cleaned[key] = value
+            cleaned[clean_key] = clean_value
         
         return cleaned
     

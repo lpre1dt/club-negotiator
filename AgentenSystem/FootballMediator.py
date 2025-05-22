@@ -1,60 +1,88 @@
 import random
 from typing import List, Tuple, Optional
+# Import Player class
+from PlayerAgent import Player
 
 
 class ClubBasedFootballMediator:
     """
-    Mediator für Club-basierte Fußballspieler-Verhandlungen
-    
-    Dieser neue Mediator kann mit unterschiedlich großen Squads umgehen und
-    koordiniert Spieler-Tausch-Vorschläge zwischen echten Club-Teams.
-    
-    Wichtige Änderungen:
-    - Unterstützt unterschiedliche Squad-Größen
-    - Separate Squads für Käufer und Verkäufer
-    - Validierung für realistische Tausch-Vorschläge
+    Vermittler (Mediator) für club-basierte Fußballspieler-Verhandlungen.
+
+    Diese Klasse ist zentral für die Koordination von Verhandlungsvorschlägen zwischen
+    zwei Fußball-Clubs (Agenten). Sie unterstützt Verhandlungen mit unterschiedlich
+    großen Spielerkadern und bietet Mechanismen für verschiedene Arten von
+    Tauschangeboten:
+    - Interne Positionswechsel innerhalb eines Teams (`propose_player_swap`, `propose_team_shuffle`).
+    - Direkte Spielertausche zwischen den beiden Clubs (`propose_inter_club_swap`).
+
+    Der Mediator speichert die Spielerpools beider Clubs und protokolliert alle
+    Tauschentscheidungen (`trade_log`). Er validiert auch die Konsistenz
+    der Kader (repräsentiert durch Indexlisten für positionsbasierte Agenten).
+
+    Wichtige Merkmale:
+    - Initialisierung mit den Spielerlisten (Pools) beider Clubs.
+    - Generierung von initialen Kaderaufstellungen (als Indexlisten).
+    - Vorschlag von verschiedenen Tauschtypen.
+    - Protokollierung von Tauschangeboten und deren Ergebnissen.
+    - Validierung von Kaderzuständen.
     """
 
-    def __init__(self, buyer_squad_size: int, seller_squad_size: int):
+    def __init__(self, buyer_players_pool: List[Player], seller_players_pool: List[Player]):
         """
-        Initialisiert den Club-basierten Mediator
-        
+        Initialisiert den `ClubBasedFootballMediator`.
+
         Args:
-            buyer_squad_size: Anzahl Spieler im Käufer-Squad
-            seller_squad_size: Anzahl Spieler im Verkäufer-Squad
-            
-        Hinweis: Die Squad-Größen können unterschiedlich sein!
+            buyer_players_pool (List[Player]): Eine Liste von `Player`-Objekten, die den
+                                               Spielerpool des Käufer-Clubs repräsentiert.
+            seller_players_pool (List[Player]): Eine Liste von `Player`-Objekten, die den
+                                                Spielerpool des Verkäufer-Clubs repräsentiert.
         """
-        self.buyer_size = buyer_squad_size
-        self.seller_size = seller_squad_size
-        self.min_size = min(buyer_squad_size, seller_squad_size)
-        self.max_size = max(buyer_squad_size, seller_squad_size)
+        # Speichert die übergebenen Spielerlisten als Pools für Käufer und Verkäufer.
+        self.buyer_players_pool: List[Player] = buyer_players_pool
+        self.seller_players_pool: List[Player] = seller_players_pool
+        
+        # Ermittle die Größe der Spielerpools für Käufer und Verkäufer.
+        self.buyer_size: int = len(self.buyer_players_pool)
+        self.seller_size: int = len(self.seller_players_pool)
+        
+        # Hilfsvariablen für minimale und maximale Kadergröße, nützlich für bestimmte Strategien.
+        self.min_size: int = min(self.buyer_size, self.seller_size)
+        self.max_size: int = max(self.buyer_size, self.seller_size)
+
+        self.trade_log: list = [] # Initialisiert das Protokoll für Tauschentscheidungen.
         
         print(f"🏟️ MEDIATOR INITIALISIERT:")
-        print(f"   Käufer-Squad: {self.buyer_size} Spieler")
-        print(f"   Verkäufer-Squad: {self.seller_size} Spieler")
+        print(f"   Käufer-Pool Größe: {self.buyer_size} Spieler") # Korrigierte Ausgabebezeichnung
+        print(f"   Verkäufer-Pool Größe: {self.seller_size} Spieler") # Korrigierte Ausgabebezeichnung
         
-        if self.buyer_size != self.seller_size:
-            print(f"   ⚠️ Unterschiedliche Squad-Größen detected!")
-            print(f"   Verhandlung wird auf {self.min_size} Positionen beschränkt")
+        # Anmerkung: Die `buyer_size` und `seller_size` Attribute beziehen sich auf die Größe
+        # der übergebenen Spieler-Pools. Die `init_squads` Methode erstellt basierend darauf
+        # Listen von Indices, die die initiale Anordnung der Spieler für positionsbasierte
+        # Utility-Berechnungen darstellen.
 
     def init_squads(self) -> Tuple[List[int], List[int]]:
         """
-        Erstellt die initialen Squad-Aufstellungen für beide Clubs
+        Erstellt die initialen Kaderaufstellungen für beide Clubs als Listen von Positions-Indices.
+
+        Diese Indexlisten repräsentieren die anfängliche Anordnung der Spieler aus den
+        entsprechenden Spielerpools (`self.buyer_players_pool`, `self.seller_players_pool`).
+        Jeder Index entspricht einem Spieler im jeweiligen Pool.
         
         Returns:
-            Tuple[List[int], List[int]]: (Käufer-Squad, Verkäufer-Squad)
-            
-        Beide Squads beginnen mit sequenzieller Aufstellung: [0,1,2,3,...]
+            Tuple[List[int], List[int]]: Ein Tupel bestehend aus zwei Listen:
+                                           - `buyer_squad_indices`: Liste der Indices für den Käufer-Kader.
+                                           - `seller_squad_indices`: Liste der Indices für den Verkäufer-Kader.
+                                           Beide Listen sind initial sequenziell von 0 bis `size-1`.
         """
-        buyer_squad = list(range(self.buyer_size))
-        seller_squad = list(range(self.seller_size))
+        # Erzeuge eine sequenzielle Liste von Indices für jeden Kader.
+        buyer_squad_indices = list(range(self.buyer_size))
+        seller_squad_indices = list(range(self.seller_size))
         
-        print(f"\n📋 INITIALE SQUADS ERSTELLT:")
-        print(f"   Käufer-Squad: {buyer_squad}")
-        print(f"   Verkäufer-Squad: {seller_squad}")
+        print(f"\n📋 INITIALE POSITIONS-SQUADS (INDICES) ERSTELLT:")
+        print(f"   Käufer-Squad-Indices: {buyer_squad_indices}")
+        print(f"   Verkäufer-Squad-Indices: {seller_squad_indices}")
         
-        return buyer_squad, seller_squad
+        return buyer_squad_indices, seller_squad_indices
 
     def propose_player_swap(
         self, 
@@ -62,29 +90,30 @@ class ClubBasedFootballMediator:
         seller_squad: List[int]
     ) -> Tuple[List[int], List[int]]:
         """
-        Schlägt einen Spielertausch innerhalb der Squads vor
-        
-        Da beide Clubs ihre eigenen Spieler haben, werden Positionen
-        nur INNERHALB jedes Clubs getauscht, nicht zwischen Clubs.
+        Schlägt einen *intra-team* Positions-Tausch innerhalb der Squads vor.
+
+        Dieser Tausch betrifft die Anordnung von Spielern (repräsentiert durch Indices)
+        INNERHALB eines einzelnen Clubs und ist NICHT für Tausche zwischen Clubs.
+        Die Spieler-Objekte selbst werden hier nicht bewegt, nur ihre Positionen.
         
         Args:
-            buyer_squad: Aktuelle Käufer-Squad-Aufstellung
-            seller_squad: Aktuelle Verkäufer-Squad-Aufstellung
+            buyer_squad: Aktuelle Käufer-Squad-Aufstellung (Liste von Indices).
+            seller_squad: Aktuelle Verkäufer-Squad-Aufstellung (Liste von Indices).
             
         Returns:
-            Tuple[List[int], List[int]]: Neue Squad-Aufstellungen nach Swap
+            Tuple[List[int], List[int]]: Neue Squad-Aufstellungen nach dem internen Swap.
         """
         # Wähle zufällig einen der beiden Squads für den Swap
-        if random.choice([True, False]) and len(buyer_squad) > 1:
+        if random.choice([True, False]) and self.buyer_size > 1:
             # Swap im Käufer-Squad
             new_buyer_squad = self._swap_positions_in_squad(buyer_squad)
             new_seller_squad = seller_squad.copy()
-        elif len(seller_squad) > 1:
+        elif self.seller_size > 1:
             # Swap im Verkäufer-Squad
             new_buyer_squad = buyer_squad.copy()
             new_seller_squad = self._swap_positions_in_squad(seller_squad)
         else:
-            # Fallback: Keine Änderung
+            # Fallback: Keine Änderung, wenn beide Squads zu klein sind
             new_buyer_squad = buyer_squad.copy()
             new_seller_squad = seller_squad.copy()
         
@@ -92,28 +121,30 @@ class ClubBasedFootballMediator:
 
     def _swap_positions_in_squad(self, squad: List[int]) -> List[int]:
         """
-        Tauscht zwei zufällige Positionen innerhalb eines Squads
+        Tauscht zwei zufällige Positionen (Indices) innerhalb eines Squads.
+        Dies ist eine Hilfsmethode für *intra-team* Swaps.
         
         Args:
-            squad: Squad-Aufstellung
+            squad: Squad-Aufstellung (Liste von Indices).
             
         Returns:
-            List[int]: Squad mit getauschten Positionen
+            List[int]: Squad mit getauschten Positionen (Indices).
         """
-        if len(squad) <= 1:
+        squad_len = len(squad)
+        if squad_len <= 1:
             return squad.copy()
         
         new_squad = squad.copy()
         
         # Wähle zwei verschiedene Positionen
-        pos1 = random.randint(0, len(squad) - 1)
-        pos2 = random.randint(0, len(squad) - 1)
+        pos1 = random.randrange(squad_len)
+        pos2 = random.randrange(squad_len)
         
         # Sicherstellen, dass verschiedene Positionen gewählt werden
-        while pos1 == pos2 and len(squad) > 1:
-            pos2 = random.randint(0, len(squad) - 1)
+        while pos1 == pos2: # Loop only needed if squad_len > 1, which is already checked
+            pos2 = random.randrange(squad_len)
         
-        # Tausche die Spieler an diesen Positionen
+        # Tausche die Indices an diesen Positionen
         new_squad[pos1], new_squad[pos2] = new_squad[pos2], new_squad[pos1]
         
         return new_squad
@@ -125,66 +156,127 @@ class ClubBasedFootballMediator:
         shuffle_percentage: float = 0.3
     ) -> Tuple[List[int], List[int]]:
         """
-        Schlägt eine größere Umstellung in einem oder beiden Teams vor
+        Schlägt eine größere *intra-team* Positions-Umstellung in einem oder beiden Teams vor.
         
+        Dieser Shuffle betrifft die Anordnung von Spielern (repräsentiert durch Indices)
+        INNERHALB eines einzelnen Clubs und ist NICHT für Tausche zwischen Clubs.
+        Die Spieler-Objekte selbst werden hier nicht bewegt, nur ihre Positionen.
+
         Args:
-            buyer_squad: Aktuelle Käufer-Squad-Aufstellung
-            seller_squad: Aktuelle Verkäufer-Squad-Aufstellung  
-            shuffle_percentage: Anteil der Spieler die umgestellt werden
+            buyer_squad: Aktuelle Käufer-Squad-Aufstellung (Liste von Indices).
+            seller_squad: Aktuelle Verkäufer-Squad-Aufstellung (Liste von Indices).
+            shuffle_percentage: Anteil der Spielerpositionen, die umgestellt werden sollen.
             
         Returns:
-            Tuple[List[int], List[int]]: Neue Squad-Aufstellungen nach Shuffle
+            Tuple[List[int], List[int]]: Neue Squad-Aufstellungen nach dem internen Shuffle.
         """
         # Entscheide zufällig welche Squads geshuffelt werden
-        shuffle_buyer = random.choice([True, False])
-        shuffle_seller = random.choice([True, False])
+        shuffle_buyer = random.choice([True, False]) if self.buyer_size > 1 else False
+        shuffle_seller = random.choice([True, False]) if self.seller_size > 1 else False
         
-        # Mindestens einer muss geshuffelt werden
+        # Mindestens einer muss geshuffelt werden, wenn möglich
         if not shuffle_buyer and not shuffle_seller:
-            shuffle_buyer = True
+            if self.buyer_size > 1: shuffle_buyer = True
+            elif self.seller_size > 1: shuffle_seller = True
+            # If both are size 1 or less, no shuffle happens.
         
         new_buyer_squad = buyer_squad.copy()
         new_seller_squad = seller_squad.copy()
         
         if shuffle_buyer:
-            new_buyer_squad = self._shuffle_squad(buyer_squad, shuffle_percentage)
+            new_buyer_squad = self._shuffle_squad(new_buyer_squad, shuffle_percentage)
         
         if shuffle_seller:
-            new_seller_squad = self._shuffle_squad(seller_squad, shuffle_percentage)
+            new_seller_squad = self._shuffle_squad(new_seller_squad, shuffle_percentage)
         
         return new_buyer_squad, new_seller_squad
 
     def _shuffle_squad(self, squad: List[int], percentage: float) -> List[int]:
         """
-        Shuffelt einen Anteil der Positionen in einem Squad
+        Shuffelt einen Anteil der Positionen (Indices) in einem Squad.
+        Dies ist eine Hilfsmethode für *intra-team* Shuffles.
         
         Args:
-            squad: Zu shuffelnde Squad-Aufstellung
-            percentage: Anteil der zu shufflenden Positionen (0.0 bis 1.0)
+            squad: Zu shuffelnde Squad-Aufstellung (Liste von Indices).
+            percentage: Anteil der zu shufflenden Positionen (0.0 bis 1.0).
             
         Returns:
-            List[int]: Squad mit geshuffelten Positionen
+            List[int]: Squad mit geshuffelten Positionen (Indices).
         """
-        if len(squad) <= 1:
+        squad_len = len(squad)
+        if squad_len <= 1:
             return squad.copy()
         
         new_squad = squad.copy()
-        num_to_shuffle = max(1, int(len(squad) * percentage))
+        num_to_shuffle = max(1, int(squad_len * percentage))
+        # Ensure num_to_shuffle is not greater than squad_len, can happen if percentage > 1 by mistake
+        num_to_shuffle = min(num_to_shuffle, squad_len)
+        
         
         # Wähle zufällige Positionen zum Shuffeln
-        positions_to_shuffle = random.sample(range(len(squad)), num_to_shuffle)
+        positions_to_shuffle = random.sample(range(squad_len), num_to_shuffle)
         
-        # Extrahiere die Werte an diesen Positionen
-        values_to_shuffle = [squad[i] for i in positions_to_shuffle]
+        # Extrahiere die Indices an diesen Positionen
+        indices_at_positions = [new_squad[i] for i in positions_to_shuffle]
         
-        # Shuffele diese Werte
-        random.shuffle(values_to_shuffle)
+        # Shuffele diese Indices
+        random.shuffle(indices_at_positions)
         
-        # Setze die geshuffelten Werte zurück
-        for i, val in zip(positions_to_shuffle, values_to_shuffle):
-            new_squad[i] = val
+        # Setze die geshuffelten Indices zurück an die ausgewählten Positionen
+        for i, original_index_val in enumerate(positions_to_shuffle):
+            new_squad[original_index_val] = indices_at_positions[i]
         
         return new_squad
+
+    def propose_inter_club_swap(self) -> Tuple[Optional[Player], Optional[Player]]:
+        """
+        Schlägt einen Tausch von einem Spieler des Käufers gegen einen Spieler des Verkäufers vor.
+
+        Returns:
+            Tuple[Optional[Player], Optional[Player]]: 
+                (ausgewählter Käufer-Spieler, ausgewählter Verkäufer-Spieler).
+                Gibt (None, None) zurück, wenn einer der Spieler-Pools leer ist.
+        """
+        if not self.buyer_players_pool or not self.seller_players_pool:
+            print("⚠️ Warnung: Inter-Club Swap nicht möglich, einer der Spieler-Pools ist leer.")
+            return None, None
+
+        selected_buyer_player = random.choice(self.buyer_players_pool)
+        selected_seller_player = random.choice(self.seller_players_pool)
+        
+        return selected_buyer_player, selected_seller_player
+
+    def record_trade_decision(
+        self, 
+        buyer_player_offered: Optional[Player], 
+        seller_player_offered: Optional[Player], 
+        buyer_accepted: bool, 
+        seller_accepted: bool, 
+        trade_executed: bool
+    ):
+        """
+        Protokolliert die Details und das Ergebnis eines Inter-Club-Tauschangebots.
+
+        Args:
+            buyer_player_offered: Der Spieler-Objekt, das der Käufer angeboten hat (None wenn kein Angebot).
+            seller_player_offered: Der Spieler-Objekt, das der Verkäufer angeboten hat (None wenn kein Angebot).
+            buyer_accepted: Boolean, ob der Käufer den vorgeschlagenen Tausch akzeptiert hat.
+            seller_accepted: Boolean, ob der Verkäufer den vorgeschlagenen Tausch akzeptiert hat.
+            trade_executed: Boolean, ob der Tausch basierend auf den Akzeptanzen durchgeführt wurde.
+        """
+        log_entry = {
+            "buyer_player_offered_name": buyer_player_offered.name if buyer_player_offered else "N/A",
+            "seller_player_offered_name": seller_player_offered.name if seller_player_offered else "N/A",
+            "buyer_accepted": buyer_accepted,
+            "seller_accepted": seller_accepted,
+            "trade_executed": trade_executed,
+            # buyer_player_received would be seller_player_offered,
+            # seller_player_received would be buyer_player_offered.
+            # Storing offered players is sufficient to understand the exchange.
+        }
+        self.trade_log.append(log_entry)
+        # Optional: print(f"Trade Logged: {log_entry}")
+
 
     def validate_squads(
         self, 
@@ -192,11 +284,11 @@ class ClubBasedFootballMediator:
         seller_squad: List[int]
     ) -> Tuple[bool, str]:
         """
-        Validiert ob die Squad-Aufstellungen gültig sind
+        Validiert ob die Squad-Aufstellungen (Listen von Indices) gültig sind.
         
         Args:
-            buyer_squad: Käufer-Squad-Aufstellung
-            seller_squad: Verkäufer-Squad-Aufstellung
+            buyer_squad: Käufer-Squad-Aufstellung (Liste von Indices).
+            seller_squad: Verkäufer-Squad-Aufstellung (Liste von Indices).
             
         Returns:
             Tuple[bool, str]: (Ist gültig?, Fehlermeldung falls ungültig)
@@ -235,26 +327,32 @@ class ClubBasedFootballMediator:
             dict: Mediator-Statistiken
         """
         return {
-            "buyer_squad_size": self.buyer_size,
-            "seller_squad_size": self.seller_size,
-            "min_squad_size": self.min_size,
-            "max_squad_size": self.max_size,
+            "buyer_squad_size": self.buyer_size, # Should reflect actual pool size for player objects
+            "seller_squad_size": self.seller_size, # Should reflect actual pool size for player objects
+            "min_squad_size": self.min_size, # Based on pool sizes
+            "max_squad_size": self.max_size, # Based on pool sizes
             "squads_equal_size": self.buyer_size == self.seller_size,
-            "size_difference": abs(self.buyer_size - self.seller_size)
+            "size_difference": abs(self.buyer_size - self.seller_size),
+            "trade_log_entries": len(self.trade_log) # New statistic
         }
 
 
 # Rückwärts-Kompatibilität: Alias für alten Mediator
 class FootballMediator(ClubBasedFootballMediator):
     """
-    Alias für Rückwärts-Kompatibilität mit dem alten System
+    Alias für Rückwärts-Kompatibilität mit dem alten System.
     
-    DEPRECATED: Verwende ClubBasedFootballMediator direkt
+    DEPRECATED: Verwende ClubBasedFootballMediator direkt.
+    Dieser Alias ist möglicherweise nicht voll funktionsfähig mit neuen Features
+    wie Inter-Club-Swaps ohne Anpassung der aufrufenden Logik.
     """
     def __init__(self, num_players_a: int, num_players_b: int):
         print("⚠️ Warnung: FootballMediator ist deprecated!")
         print("   Verwende ClubBasedFootballMediator für vollständige Funktionalität")
-        super().__init__(num_players_a, num_players_b)
+        # Erstelle Dummy-Spieler-Pools für den neuen Konstruktor
+        dummy_buyer_pool = [Player(f"BuyerSamplePlayer{i+1}", {}) for i in range(num_players_a)]
+        dummy_seller_pool = [Player(f"SellerSamplePlayer{i+1}", {}) for i in range(num_players_b)]
+        super().__init__(dummy_buyer_pool, dummy_seller_pool)
     
     def init_squads(self) -> List[int]:
         """
